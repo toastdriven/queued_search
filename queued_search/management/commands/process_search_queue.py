@@ -24,11 +24,9 @@ class Command(NoArgsCommand):
     base_options = (
         make_option('-b', '--batch-size', action='store', dest='batchsize',
             default=None, type='int',
-            help='Number of items to index at once.'
-        ),
+            help='Number of items to index at once.'),
         make_option("-u", "--using", action="store", type="string", dest="using", default=DEFAULT_ALIAS,
-            help='If provided, chooses a connection to work with.'
-        ),
+            help='If provided, chooses a connection to work with.'),
     )
     option_list = NoArgsCommand.option_list + base_options
 
@@ -239,7 +237,7 @@ class Command(NoArgsCommand):
                 end = min(start + self.batchsize, total)
                 batch_instances = instances[start:end]
 
-                self.log.debug("  indexing %s - %d of %d." % (start+1, end, total))
+                self.log.debug("  indexing %s - %d of %d." % (start + 1, end, total))
                 current_index._get_backend(self.using).update(current_index, batch_instances)
 
                 for updated in batch_instances:
