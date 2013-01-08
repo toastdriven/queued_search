@@ -89,7 +89,6 @@ class Command(NoArgsCommand):
             pass
 
         self.log.debug("Queue consumed %s items in %s." % (items, datetime.datetime.now() - start_time))
-
         start_time = datetime.datetime.now()
 
         try:
@@ -100,8 +99,7 @@ class Command(NoArgsCommand):
             self.requeue()
             raise e
 
-        self.log.info("Processed %s items in %s." % (items, datetime.datetime.now() -
-            start_time))
+        self.log.info("Processed %s items in %s." % (items, datetime.datetime.now() - start_time))
 
     def requeue(self):
         """
