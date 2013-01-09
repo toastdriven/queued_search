@@ -1,3 +1,4 @@
+import datetime
 import logging
 from optparse import make_option
 from queues import queues, QueueException
@@ -49,8 +50,11 @@ class Command(NoArgsCommand):
         # Check if enough is there to process.
         if not len(self.queue):
             self.log.info("Not enough items in the queue to process.")
+            return
 
         self.log.info("Starting to process the queue.")
+        start_time = datetime.datetime.now()
+        items = 0
 
         # Consume the whole queue first so that we can group update/deletes
         # for efficiency.
@@ -62,11 +66,15 @@ class Command(NoArgsCommand):
                     break
 
                 self.process_message(message)
+                items += 1
         except QueueException:
             # We've run out of items in the queue.
             pass
 
-        self.log.info("Queue consumed.")
+        self.log.info("Queue consumed %s items in %s." % (items,
+            datetime.datetime.now() - start_time))
+
+        start_time = datetime.datetime.now()
 
         try:
             self.handle_updates()
@@ -76,7 +84,8 @@ class Command(NoArgsCommand):
             self.requeue()
             raise e
 
-        self.log.info("Processing complete.")
+        self.log.info("Processed %s items in %s." % (items, datetime.datetime.now() -
+            start_time))
 
     def requeue(self):
         """
@@ -170,7 +179,8 @@ class Command(NoArgsCommand):
         try:
             instance = model_class.objects.get(pk=pk)
         except ObjectDoesNotExist:
-            self.log.error("Couldn't load model instance with pk #%s. Somehow it went missing?" % pk)
+            self.log.error("Couldn't load %s instance with pk #%s. Somehow it went missing?" %
+                    (model_class, pk))
             return None
         except MultipleObjectsReturned:
             self.log.error("More than one object with pk #%s. Oops?" % pk)
