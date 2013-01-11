@@ -49,10 +49,10 @@ class Command(NoArgsCommand):
 
         # Check if enough is there to process.
         if not len(self.queue):
-            self.log.info("Not enough items in the queue to process.")
+            self.log.debug("Not enough items in the queue to process.")
             return
 
-        self.log.info("Starting to process the queue.")
+        self.log.debug("Starting to process the queue.")
         start_time = datetime.datetime.now()
         items = 0
 
@@ -71,7 +71,7 @@ class Command(NoArgsCommand):
             # We've run out of items in the queue.
             pass
 
-        self.log.info("Queue consumed %s items in %s." % (items,
+        self.log.debug("Queue consumed %s items in %s." % (items,
             datetime.datetime.now() - start_time))
 
         start_time = datetime.datetime.now()
@@ -91,7 +91,7 @@ class Command(NoArgsCommand):
         """
         On failure, requeue all unprocessed messages.
         """
-        self.log.error('Requeuing unprocessed messages.')
+        self.log.debug('Requeuing unprocessed messages.')
         update_count = 0
         delete_count = 0
 
@@ -105,7 +105,7 @@ class Command(NoArgsCommand):
                 self.queue.write('delete:%s' % delete)
                 delete_count += 1
 
-        self.log.error('Requeued %d updates and %d deletes.' % (update_count, delete_count))
+        self.info.info('Requeued %d updates and %d deletes.' % (update_count, delete_count))
 
     def process_message(self, message):
         """
@@ -212,7 +212,7 @@ class Command(NoArgsCommand):
             (object_path, pk) = self.split_obj_identifier(obj_identifier)
 
             if object_path is None or pk is None:
-                self.log.error("Skipping.")
+                self.log.info("Skipping.")
                 continue
 
             if object_path not in updates:
@@ -229,7 +229,7 @@ class Command(NoArgsCommand):
                 current_index = self.get_index(model_class)
 
             if not current_index:
-                self.log.error("Skipping.")
+                self.log.info("Skipping.")
                 continue
 
             instances = [self.get_instance(model_class, pk) for pk in pks]
@@ -269,7 +269,7 @@ class Command(NoArgsCommand):
             (object_path, pk) = self.split_obj_identifier(obj_identifier)
 
             if object_path is None or pk is None:
-                self.log.error("Skipping.")
+                self.log.info("Skipping.")
                 continue
 
             if object_path not in deletes:
@@ -286,7 +286,7 @@ class Command(NoArgsCommand):
                 current_index = self.get_index(model_class)
 
             if not current_index:
-                self.log.error("Skipping.")
+                self.log.info("Skipping.")
                 continue
 
             pks = []
