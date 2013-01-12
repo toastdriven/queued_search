@@ -179,7 +179,7 @@ class Command(NoArgsCommand):
         try:
             instance = model_class.objects.get(pk=pk)
         except ObjectDoesNotExist:
-            self.log.error("Couldn't load %s instance with pk #%s. Somehow it went missing?" %
+            self.log.info("Couldn't load %s instance with pk #%s. Somehow it went missing?" %
                     (model_class, pk))
             return None
         except MultipleObjectsReturned:
