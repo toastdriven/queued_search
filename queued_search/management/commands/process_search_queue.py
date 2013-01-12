@@ -1,11 +1,16 @@
 import datetime
 import logging
+import redis
+
 from optparse import make_option
 from queues import queues, QueueException
+
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.core.management.base import NoArgsCommand
+from django.core.mail import mail_admins
 from django.db.models.loading import get_model
+
 from haystack import connections
 from haystack.constants import DEFAULT_ALIAS
 from haystack.exceptions import NotHandled
@@ -18,6 +23,12 @@ LOG_LEVEL = getattr(settings, 'SEARCH_QUEUE_LOG_LEVEL', logging.ERROR)
 logging.basicConfig(
     level=LOG_LEVEL
 )
+
+redis_client = redis.Redis(
+    host=settings.REDIS_HOST,
+    port=settings.REDIS_PORT,
+    db=settings.REDIS_DB)
+
 
 class Command(NoArgsCommand):
     help = "Consume any objects that have been queued for modification in search."
@@ -71,8 +82,8 @@ class Command(NoArgsCommand):
             # We've run out of items in the queue.
             pass
 
-        self.log.debug("Queue consumed %s items in %s." % (items,
-            datetime.datetime.now() - start_time))
+        self.log.debug("Queue consumed %s items in %s." %
+            (items, datetime.datetime.now() - start_time))
 
         start_time = datetime.datetime.now()
 
@@ -105,7 +116,27 @@ class Command(NoArgsCommand):
                 self.queue.write('delete:%s' % delete)
                 delete_count += 1
 
-        self.info.info('Requeued %d updates and %d deletes.' % (update_count, delete_count))
+        self.log.info('Requeued %d updates and %d deletes.' % (update_count, delete_count))
+
+    def requeue_object(self, message, error_message):
+
+        requeue_message = 'requeued_%s' % (message)
+
+        if redis_client.exists(requeue_message):
+            count = int(redis_client[requeue_message])
+            count += 1
+            redis_client[requeue_message] = count
+            if count % 5 == 0:
+                email_message = 'Requeued %s %sx' % (message, count)
+                mail_admins(email_message, email_message)
+        else:
+            count = 1
+            redis_client[requeue_message] = count
+            redis_client.expire(requeue_message, 60 * 5)
+
+        error_message += " Requeued %s times" % (count)
+        self.log.info(error_message)
+        self.queue.write(message)
 
     def process_message(self, message):
         """
@@ -178,10 +209,6 @@ class Command(NoArgsCommand):
         """Fetch the instance in a standarized way."""
         try:
             instance = model_class.objects.get(pk=pk)
-        except ObjectDoesNotExist:
-            self.log.info("Couldn't load %s instance with pk #%s. Somehow it went missing?" %
-                    (model_class, pk))
-            return None
         except MultipleObjectsReturned:
             self.log.error("More than one object with pk #%s. Oops?" % pk)
             return None
@@ -232,7 +259,14 @@ class Command(NoArgsCommand):
                 self.log.info("Skipping.")
                 continue
 
-            instances = [self.get_instance(model_class, pk) for pk in pks]
+            instances = []
+            for pk in pks:
+                try:
+                    instances.append(self.get_instance(model_class, pk))
+                except ObjectDoesNotExist:
+                    self.requeue_object(
+                        'update:%s.%s' % (object_path, pk),
+                        "Couldn't load %s instance with pk #%s." % (model_class, pk))
 
             # Filter out what we didn't find.
             instances = [instance for instance in instances if instance is not None]
