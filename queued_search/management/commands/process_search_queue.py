@@ -130,6 +130,7 @@ class Command(NoArgsCommand):
                 email_message = 'Requeued %s %sx' % (message, count)
                 mail_admins(email_message, email_message)
                 del redis_client[requeue_message]
+                return
         else:
             count = 1
             redis_client[requeue_message] = count
