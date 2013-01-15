@@ -126,9 +126,10 @@ class Command(NoArgsCommand):
             count = int(redis_client[requeue_message])
             count += 1
             redis_client[requeue_message] = count
-            if count % 5 == 0:
+            if count == 5:
                 email_message = 'Requeued %s %sx' % (message, count)
                 mail_admins(email_message, email_message)
+                del redis_client[requeue_message]
         else:
             count = 1
             redis_client[requeue_message] = count
