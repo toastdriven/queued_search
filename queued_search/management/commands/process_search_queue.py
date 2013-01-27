@@ -224,20 +224,18 @@ class Command(NoArgsCommand):
                 self.log.error("Skipping.")
                 continue
 
-            instances = [self.get_instance(model_class, pk) for pk in pks]
-
-            # Filter out what we didn't find.
-            instances = [instance for instance in instances if instance is not None]
-
             # Update the batch of instances for this class.
             # Use the backend instead of the index because we can batch the
             # instances.
-            total = len(instances)
+            total = len(pks)
             self.log.debug("Indexing %d %s." % (total, object_path))
 
             for start in range(0, total, self.batchsize):
                 end = min(start + self.batchsize, total)
-                batch_instances = instances[start:end]
+
+                batch_instances = [self.get_instance(model_class, pk) for pk in pks[start:end]]
+                # Filter out what we didn't find.
+                batch_instances = [instance for instance in batch_instances if instance is not None]
 
                 self.log.debug("  indexing %s - %d of %d." % (start+1, end, total))
                 current_index._get_backend(self.using).update(current_index, batch_instances)
