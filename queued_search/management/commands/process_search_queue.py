@@ -8,7 +8,6 @@ from queues import queues, QueueException
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.core.management.base import NoArgsCommand
-from django.core.mail import mail_admins
 from django.db.models.loading import get_model
 
 from haystack import connections
@@ -123,12 +122,13 @@ class Command(NoArgsCommand):
         requeue_message = 'requeued_%s' % (message)
 
         if redis_client.exists(requeue_message):
-            count = int(redis_client[requeue_message])
-            count += 1
+            count = int(redis_client[requeue_message]) + 1
             redis_client[requeue_message] = count
-            if count == 5:
+            if count > 5:
                 email_message = 'Requeued %s %sx' % (message, count)
-                mail_admins(email_message, email_message)
+                self.log.error('Message from process_search_queue', extra={
+                    'action': email_message,
+                    'error': error_message})
                 del redis_client[requeue_message]
                 return
         else:
@@ -136,8 +136,8 @@ class Command(NoArgsCommand):
             redis_client[requeue_message] = count
             redis_client.expire(requeue_message, 60 * 5)
 
-        error_message += " Requeued %s times" % (count)
-        self.log.info(error_message)
+        self.log.error('Message from process_search_queue', extra={
+            'error': '%s: requeued %s times' % (error_message, count)})
         self.queue.write(message)
 
     def process_message(self, message):
