@@ -126,7 +126,7 @@ class Command(NoArgsCommand):
             redis_client[requeue_message] = count
             if count > 5:
                 email_message = 'Requeued %s %sx' % (message, count)
-                self.log.error('Message from process_search_queue', extra={
+                self.log.info('Message from process_search_queue', extra={
                     'action': email_message,
                     'error': error_message})
                 del redis_client[requeue_message]
@@ -136,7 +136,7 @@ class Command(NoArgsCommand):
             redis_client[requeue_message] = count
             redis_client.expire(requeue_message, 60 * 5)
 
-        self.log.error('Message from process_search_queue', extra={
+        self.log.info('Message from process_search_queue', extra={
             'error': '%s: requeued %s times' % (error_message, count)})
         self.queue.write(message)
 
