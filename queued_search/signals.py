@@ -1,7 +1,7 @@
 from queues import queues
 from django.db import models
 from haystack.signals import BaseSignalProcessor
-from haystack.utils import get_identifier
+from haystack.utils import default_get_identifier
 from queued_search.utils import get_queue_name, rec_getattr
 
 
@@ -48,6 +48,6 @@ class QueuedSignalProcessor(BaseSignalProcessor):
             # ...or...
             ``delete:weblog.entry.8``
         """
-        message = "%s:%s" % (action, get_identifier(instance))
+        message = "%s:%s" % (action, default_get_identifier(instance))
         queue = queues.Queue(get_queue_name())
         return queue.write(message)

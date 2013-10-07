@@ -284,8 +284,10 @@ class Command(NoArgsCommand):
             pks = []
 
             for obj_identifier in obj_identifiers:
-                current_index.remove_object(obj_identifier, using=self.using)
-                pks.append(self.split_obj_identifier(obj_identifier)[1])
+                pk = self.split_obj_identifier(obj_identifier)[1]
+                instance = self.get_instance(model_class, pk)
+                current_index.remove_object(instance, using=self.using)
+                pks.append(pk)
                 self.processed_deletes.add(obj_identifier)
 
             self.log.debug("Deleted objects for '%s': %s" % (object_path, ", ".join(pks)))
