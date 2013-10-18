@@ -1,5 +1,7 @@
 from queues import queues
 from django.db import models
+from haystack import connections
+from haystack.exceptions import NotHandled
 from haystack.signals import BaseSignalProcessor
 from haystack.utils import default_get_identifier
 from queued_search.utils import get_queue_name, rec_getattr
@@ -48,6 +50,13 @@ class QueuedSignalProcessor(BaseSignalProcessor):
             # ...or...
             ``delete:weblog.entry.8``
         """
+        
+        """But first check if the model even has a ``SearchIndex`` implementation."""
+        try:
+            connections['default'].get_unified_index().get_index(instance.__class__)
+        except NotHandled:
+            return False
+        
         message = "%s:%s" % (action, default_get_identifier(instance))
         queue = queues.Queue(get_queue_name())
         return queue.write(message)
