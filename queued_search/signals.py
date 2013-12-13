@@ -21,19 +21,25 @@ class QueuedSignalProcessor(BaseSignalProcessor):
             filter_fields = instance.queue_filter()
         except AttributeError:
             filter_fields = {}
-        # Make sure filter fields are all set to acceptable value, otherwise delete
+        # Make sure filter fields are all set to acceptable value, otherwise delete (unless new object, in which case just don't index)
         for filter_field, filter_values in filter_fields.items():
             if rec_getattr(instance, filter_field) not in filter_values:
-                return self.enqueue('delete', instance)
+                if kwargs['created']:
+                    return True
+                else:
+                    return self.enqueue('delete', instance)
 
         try:
             exclude_fields = instance.queue_exclude()
         except AttributeError:
             exclude_fields = {}
-        # Make sure exclude fields are not set to unacceptable value, otherwise delete
+        # Make sure exclude fields are not set to unacceptable value, otherwise delete (unless new object, in which case just don't index)
         for exclude_field, exclude_values in exclude_fields.items():
             if rec_getattr(instance, exclude_field) in exclude_values:
-                return self.enqueue('delete', instance)
+                if kwargs['created']:
+                    return True
+                else:
+                    return self.enqueue('delete', instance)
 
         return self.enqueue('update', instance)
 
