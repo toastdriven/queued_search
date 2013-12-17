@@ -1,4 +1,6 @@
+import logging
 from queues import queues
+from django.conf import settings
 from django.db import models
 from haystack import connections
 from haystack.exceptions import NotHandled
@@ -6,6 +8,13 @@ from haystack.signals import BaseSignalProcessor
 from haystack.utils import default_get_identifier
 from queued_search.utils import get_queue_name, rec_getattr
 
+
+LOG_LEVEL = getattr(settings, 'SEARCH_QUEUE_LOG_LEVEL', logging.ERROR)
+
+logging.basicConfig(
+    level=LOG_LEVEL
+)
+logger = logging.getLogger('queued_search')
 
 class QueuedSignalProcessor(BaseSignalProcessor):
     def setup(self):
@@ -63,6 +72,8 @@ class QueuedSignalProcessor(BaseSignalProcessor):
         except NotHandled:
             return False
         
-        message = "%s:%s" % (action, default_get_identifier(instance))
+        instance_id = default_get_identifier(instance)
+        logger.info("Queueing %s to %s", instance_id, action)
+        message = "%s:%s" % (action, instance_id)
         queue = queues.Queue(get_queue_name())
         return queue.write(message)
