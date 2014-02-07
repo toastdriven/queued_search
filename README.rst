@@ -20,10 +20,10 @@ Requirements
 * Python 2.6+ or Python 3.3+
 * Django 1.5+
 * Haystack 2.0.X (http://github.com/toastdriven/django-haystack)
-* Queue_front (https://bitbucket.org/dwaiter/queue-front)
+* Queue-front (https://bitbucket.org/dwaiter/queue-front)
 
 You also need to install your choice of one of the supported search engines for
-Haystack and one of the supported queue backends for Queue_front.
+Haystack and one of the supported queue backends for Queue-front.
 
 
 Setup
