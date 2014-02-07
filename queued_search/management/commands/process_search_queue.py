@@ -1,6 +1,6 @@
 import logging
 from optparse import make_option
-from queues import queues, QueueException
+from queue_front import queues, QueueException
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.core.management.base import NoArgsCommand

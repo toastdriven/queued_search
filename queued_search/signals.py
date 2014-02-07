@@ -1,4 +1,4 @@
-from queues import queues
+from queue_front import queues
 from django.db import models
 from haystack.signals import BaseSignalProcessor
 from haystack.utils import get_identifier
