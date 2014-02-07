@@ -1,5 +1,5 @@
 import logging
-from queues import queues, QueueException
+from queue_front import queues, QueueException
 from django.core.management import call_command
 from django.test import TestCase
 from haystack import connections

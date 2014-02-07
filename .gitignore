@@ -6,3 +6,6 @@ tests/queues
 env
 dist
 build
+.tox
+*.egg-info/
+whoosh_index/
