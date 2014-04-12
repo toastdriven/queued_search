@@ -13,6 +13,13 @@ class QueuedSignalProcessor(BaseSignalProcessor):
     def teardown(self):
         models.signals.post_save.disconnect(self.enqueue_save)
         models.signals.post_delete.disconnect(self.enqueue_delete)
+        
+    @property
+    def queue(self):
+        if hasattr(self, '_queue'):
+            return self._queue
+        self._queue = queues.Queue(get_queue_name())
+        return self._queue
 
     def enqueue_save(self, sender, instance, **kwargs):
         return self.enqueue('update', instance)
@@ -31,5 +38,4 @@ class QueuedSignalProcessor(BaseSignalProcessor):
             ``delete:weblog.entry.8``
         """
         message = "%s:%s" % (action, get_identifier(instance))
-        queue = queues.Queue(get_queue_name())
-        return queue.write(message)
+        return self.queue.write(message)
