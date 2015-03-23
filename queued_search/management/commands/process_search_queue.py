@@ -6,7 +6,10 @@ from optparse import make_option
 from queues import queues, QueueException
 
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.core.exceptions import (
+    ObjectDoesNotExist,
+    MultipleObjectsReturned,
+)
 from django.core.management.base import NoArgsCommand
 from django.db.models.loading import get_model
 
@@ -26,18 +29,22 @@ logging.basicConfig(
 redis_client = redis.Redis(
     host=settings.REDIS_HOST,
     port=settings.REDIS_PORT,
-    db=settings.REDIS_DB)
+    db=settings.REDIS_DB,
+)
 
 
 class Command(NoArgsCommand):
     help = "Consume any objects that have been queued for modification in search."
     can_import_settings = True
     base_options = (
-        make_option('-b', '--batch-size', action='store', dest='batchsize',
-            default=None, type='int',
-            help='Number of items to index at once.'),
-        make_option("-u", "--using", action="store", type="string", dest="using", default=DEFAULT_ALIAS,
-            help='If provided, chooses a connection to work with.'),
+        make_option(
+            '-b', '--batch-size', action='store', dest='batchsize',
+            default=None, type='int', help='Number of items to index at once.',
+        ),
+        make_option(
+            '-u', '--using', action='store', type='string', dest='using',
+            default=DEFAULT_ALIAS, help='If provided, chooses a connection to work with.',
+        ),
     )
     option_list = NoArgsCommand.option_list + base_options
 
@@ -81,8 +88,7 @@ class Command(NoArgsCommand):
             # We've run out of items in the queue.
             pass
 
-        self.log.debug("Queue consumed %s items in %s." %
-            (items, datetime.datetime.now() - start_time))
+        self.log.debug("Queue consumed %s items in %s." % (items, datetime.datetime.now() - start_time))
 
         start_time = datetime.datetime.now()
 
@@ -125,10 +131,10 @@ class Command(NoArgsCommand):
             count = int(redis_client[requeue_message]) + 1
             redis_client[requeue_message] = count
             if count > 5:
-                email_message = 'Requeued %s %sx' % (message, count)
                 self.log.info('Message from process_search_queue', extra={
-                    'action': email_message,
-                    'error': error_message})
+                    'action': 'Requeued {} {}x stopping retry'.format(message, count),
+                    'error': error_message,
+                })
                 del redis_client[requeue_message]
                 return
         else:
@@ -137,7 +143,8 @@ class Command(NoArgsCommand):
             redis_client.expire(requeue_message, 60 * 5)
 
         self.log.info('Message from process_search_queue', extra={
-            'error': '%s: requeued %s times' % (error_message, count)})
+            'error': '{}: requeued {} times'.format(error_message, count),
+        })
         self.queue.write(message)
 
     def process_message(self, message):
@@ -267,8 +274,9 @@ class Command(NoArgsCommand):
                     instances.append(self.get_instance(model_class, pk))
                 except ObjectDoesNotExist:
                     self.requeue_object(
-                        'update:%s.%s' % (object_path, pk),
-                        "Couldn't load %s instance with pk #%s." % (model_class, pk))
+                        'update:{}.{}'.format(object_path, pk),
+                        "Couldn't load %s instance with pk #%s." % (model_class, pk),
+                    )
 
             # Filter out what we didn't find.
             instances = [instance for instance in instances if instance is not None]
