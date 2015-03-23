@@ -1,10 +1,18 @@
+import datetime
 import logging
+import redis
+
 from optparse import make_option
 from queues import queues, QueueException
+
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.core.exceptions import (
+    ObjectDoesNotExist,
+    MultipleObjectsReturned,
+)
 from django.core.management.base import NoArgsCommand
 from django.db.models.loading import get_model
+
 from haystack import connections
 from haystack.constants import DEFAULT_ALIAS
 from haystack.exceptions import NotHandled
@@ -18,16 +26,24 @@ logging.basicConfig(
     level=LOG_LEVEL
 )
 
+redis_client = redis.Redis(
+    host=settings.REDIS_HOST,
+    port=settings.REDIS_PORT,
+    db=settings.REDIS_DB,
+)
+
+
 class Command(NoArgsCommand):
     help = "Consume any objects that have been queued for modification in search."
     can_import_settings = True
     base_options = (
-        make_option('-b', '--batch-size', action='store', dest='batchsize',
-            default=None, type='int',
-            help='Number of items to index at once.'
+        make_option(
+            '-b', '--batch-size', action='store', dest='batchsize',
+            default=None, type='int', help='Number of items to index at once.',
         ),
-        make_option("-u", "--using", action="store", type="string", dest="using", default=DEFAULT_ALIAS,
-            help='If provided, chooses a connection to work with.'
+        make_option(
+            '-u', '--using', action='store', type='string', dest='using',
+            default=DEFAULT_ALIAS, help='If provided, chooses a connection to work with.',
         ),
     )
     option_list = NoArgsCommand.option_list + base_options
@@ -50,9 +66,12 @@ class Command(NoArgsCommand):
 
         # Check if enough is there to process.
         if not len(self.queue):
-            self.log.info("Not enough items in the queue to process.")
+            self.log.debug("Not enough items in the queue to process.")
+            return
 
-        self.log.info("Starting to process the queue.")
+        self.log.debug("Starting to process the queue.")
+        start_time = datetime.datetime.now()
+        items = 0
 
         # Consume the whole queue first so that we can group update/deletes
         # for efficiency.
@@ -64,11 +83,13 @@ class Command(NoArgsCommand):
                     break
 
                 self.process_message(message)
+                items += 1
         except QueueException:
             # We've run out of items in the queue.
             pass
 
-        self.log.info("Queue consumed.")
+        self.log.debug("Queue consumed %s items in %s." % (items, datetime.datetime.now() - start_time))
+        start_time = datetime.datetime.now()
 
         try:
             self.handle_updates()
@@ -78,13 +99,13 @@ class Command(NoArgsCommand):
             self.requeue()
             raise e
 
-        self.log.info("Processing complete.")
+        self.log.info("Processed %s items in %s." % (items, datetime.datetime.now() - start_time))
 
     def requeue(self):
         """
         On failure, requeue all unprocessed messages.
         """
-        self.log.error('Requeuing unprocessed messages.')
+        self.log.debug('Requeuing unprocessed messages.')
         update_count = 0
         delete_count = 0
 
@@ -98,7 +119,31 @@ class Command(NoArgsCommand):
                 self.queue.write('delete:%s' % delete)
                 delete_count += 1
 
-        self.log.error('Requeued %d updates and %d deletes.' % (update_count, delete_count))
+        self.log.info('Requeued %d updates and %d deletes.' % (update_count, delete_count))
+
+    def requeue_object(self, message, error_message):
+
+        requeue_message = 'requeued_%s' % (message)
+
+        if redis_client.exists(requeue_message):
+            count = int(redis_client[requeue_message]) + 1
+            redis_client[requeue_message] = count
+            if count > 5:
+                self.log.info('Message from process_search_queue', extra={
+                    'action': 'Requeued {} {}x stopping retry'.format(message, count),
+                    'error': error_message,
+                })
+                del redis_client[requeue_message]
+                return
+        else:
+            count = 1
+            redis_client[requeue_message] = count
+            redis_client.expire(requeue_message, 60 * 5)
+
+        self.log.info('Message from process_search_queue', extra={
+            'error': '{}: requeued {} times'.format(error_message, count),
+        })
+        self.queue.write(message)
 
     def process_message(self, message):
         """
@@ -171,9 +216,6 @@ class Command(NoArgsCommand):
         """Fetch the instance in a standarized way."""
         try:
             instance = model_class.objects.get(pk=pk)
-        except ObjectDoesNotExist:
-            self.log.error("Couldn't load model instance with pk #%s. Somehow it went missing?" % pk)
-            return None
         except MultipleObjectsReturned:
             self.log.error("More than one object with pk #%s. Oops?" % pk)
             return None
@@ -204,7 +246,7 @@ class Command(NoArgsCommand):
             (object_path, pk) = self.split_obj_identifier(obj_identifier)
 
             if object_path is None or pk is None:
-                self.log.error("Skipping.")
+                self.log.info("Skipping.")
                 continue
 
             if object_path not in updates:
@@ -221,10 +263,18 @@ class Command(NoArgsCommand):
                 current_index = self.get_index(model_class)
 
             if not current_index:
-                self.log.error("Skipping.")
+                self.log.info("Skipping.")
                 continue
 
-            instances = [self.get_instance(model_class, pk) for pk in pks]
+            instances = []
+            for pk in pks:
+                try:
+                    instances.append(self.get_instance(model_class, pk))
+                except ObjectDoesNotExist:
+                    self.requeue_object(
+                        'update:{}.{}'.format(object_path, pk),
+                        "Couldn't load %s instance with pk #%s." % (model_class, pk),
+                    )
 
             # Filter out what we didn't find.
             instances = [instance for instance in instances if instance is not None]
@@ -239,7 +289,7 @@ class Command(NoArgsCommand):
                 end = min(start + self.batchsize, total)
                 batch_instances = instances[start:end]
 
-                self.log.debug("  indexing %s - %d of %d." % (start+1, end, total))
+                self.log.debug("  indexing %s - %d of %d." % (start + 1, end, total))
                 current_index._get_backend(self.using).update(current_index, batch_instances)
 
                 for updated in batch_instances:
@@ -261,7 +311,7 @@ class Command(NoArgsCommand):
             (object_path, pk) = self.split_obj_identifier(obj_identifier)
 
             if object_path is None or pk is None:
-                self.log.error("Skipping.")
+                self.log.info("Skipping.")
                 continue
 
             if object_path not in deletes:
@@ -278,7 +328,7 @@ class Command(NoArgsCommand):
                 current_index = self.get_index(model_class)
 
             if not current_index:
-                self.log.error("Skipping.")
+                self.log.info("Skipping.")
                 continue
 
             pks = []
