@@ -6,3 +6,4 @@ tests/queues
 env
 dist
 build
+.idea
