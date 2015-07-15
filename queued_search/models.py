@@ -1,2 +1,6 @@
-# O HAI.
-# Faking ``models.py`` so Django sees the app/management command.
+class QueuedModel(object):
+    """
+        Empty class just to add new parent type. Models which we want to be inserted in
+          the search queue should subclass from this.
+    """
+    pass
