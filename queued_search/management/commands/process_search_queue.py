@@ -4,7 +4,13 @@ from queues import queues, QueueException
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.core.management.base import NoArgsCommand
-from django.db.models.loading import get_model
+
+try:
+    from django.apps import apps
+    get_model = apps.get_model
+except ImportError:
+    from django.db.models.loading import get_model
+
 from haystack import connections
 from haystack.constants import DEFAULT_ALIAS
 from haystack.exceptions import NotHandled
